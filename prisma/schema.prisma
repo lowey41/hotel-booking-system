@@ -1,0 +1,199 @@
+// Prisma Schema - Hotel Booking System 2026
+// Run: npx prisma generate && npx prisma migrate dev
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  USER
+  HOTEL_OWNER
+  ADMIN
+}
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+  COMPLETED
+  NO_SHOW
+}
+
+enum HotelStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  SUSPENDED
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  REFUNDED
+  FAILED
+}
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  name          String
+  password      String?
+  avatar        String?
+  phone         String?
+  role          Role      @default(USER)
+  googleId      String?   @unique
+  emailVerified Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  bookings      Booking[]
+  reviews       Review[]
+  hotels        Hotel[]       @relation("HotelOwner")
+  wishlist      Wishlist[]
+  notifications Notification[]
+  sessions      Session[]
+
+  @@map("users")
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model Hotel {
+  id          String      @id @default(cuid())
+  name        String
+  description String
+  address     String
+  city        String
+  country     String
+  zipCode     String?
+  latitude    Float?
+  longitude   Float?
+  images      String[]
+  amenities   String[]
+  starRating  Int         @default(3)
+  status      HotelStatus @default(PENDING)
+  ownerId     String
+  checkInTime String      @default("14:00")
+  checkOutTime String     @default("11:00")
+  policies    Json?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  owner     User       @relation("HotelOwner", fields: [ownerId], references: [id])
+  rooms     Room[]
+  reviews   Review[]
+  bookings  Booking[]
+  wishlist  Wishlist[]
+
+  @@map("hotels")
+}
+
+model Room {
+  id           String   @id @default(cuid())
+  hotelId      String
+  name         String
+  type         String   // SINGLE, DOUBLE, SUITE, DELUXE, etc.
+  description  String
+  images       String[]
+  price        Float
+  capacity     Int      @default(2)
+  amenities    String[]
+  available    Boolean  @default(true)
+  totalRooms   Int      @default(1)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  hotel    Hotel     @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+  bookings Booking[]
+
+  @@map("rooms")
+}
+
+model Booking {
+  id            String        @id @default(cuid())
+  userId        String
+  hotelId       String
+  roomId        String
+  checkIn       DateTime
+  checkOut      DateTime
+  guests        Int           @default(1)
+  totalPrice    Float
+  status        BookingStatus @default(PENDING)
+  paymentStatus PaymentStatus @default(PENDING)
+  stripePaymentId String?
+  specialRequests String?
+  qrCode        String?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  user    User    @relation(fields: [userId], references: [id])
+  hotel   Hotel   @relation(fields: [hotelId], references: [id])
+  room    Room    @relation(fields: [roomId], references: [id])
+  review  Review?
+
+  @@map("bookings")
+}
+
+model Review {
+  id        String   @id @default(cuid())
+  userId    String
+  hotelId   String
+  bookingId String   @unique
+  rating    Int      // 1-5
+  title     String?
+  comment   String
+  images    String[]
+  helpful   Int      @default(0)
+  flagged   Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user    User    @relation(fields: [userId], references: [id])
+  hotel   Hotel   @relation(fields: [hotelId], references: [id])
+  booking Booking @relation(fields: [bookingId], references: [id])
+
+  @@map("reviews")
+}
+
+model Wishlist {
+  id        String   @id @default(cuid())
+  userId    String
+  hotelId   String
+  createdAt DateTime @default(now())
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  hotel Hotel @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, hotelId])
+  @@map("wishlist")
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  title     String
+  message   String
+  type      String   // BOOKING, REVIEW, SYSTEM, PROMO
+  read      Boolean  @default(false)
+  data      Json?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("notifications")
+}
